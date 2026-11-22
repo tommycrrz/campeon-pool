@@ -71,7 +71,7 @@ input[type=number]{width:100%;min-width:0;font-size:24px;font-weight:bold;paddin
 var NOMBRES=["Mesa 5","Mesa 6","Mesa 7","Mesa 8","Villa 1","Villa 2","Villa 3","Snooker","Carambola"];
 var KEY="pelusa-mesas-v2",S={};
 try{var g=localStorage.getItem(KEY);if(g){var p=JSON.parse(g);if(p&&typeof p==="object")S=p}}catch(e){}
-var confirmando=null,filtro="todas";
+var confirmando=null,filtro="todas",avisoMesa=null;
 function guardar(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function M(n){
  if(!S[n])S[n]={precio:0,acc:0,start:null,pausada:false,bebSi:false,beb:[]};
@@ -94,7 +94,7 @@ function dibujar(){
   var h="<div class='cab'><h2>"+n+"</h2><span class='est'>"+(e==="run"?"CORRIENDO":e==="pau"?"PAUSADA":"LIBRE")+"</span></div>";
   h+="<div class='sec'><div class='rot'>Precio por hora</div><label class='precio'><span>$</span><input type='number' inputmode='numeric' min='0' value='"+(m.precio||"")+"' placeholder='0' data-p></label>";
   if(e==="libre"){
-   if(!m.precio)h+="<div class='aviso'>Anotá el precio por hora antes de empezar</div>";
+   if(avisoMesa===n&&!(m.precio>0))h+="<div class='aviso'>PRIMERO INGRESÁ EL PRECIO POR HORA</div>";
    h+="<button class='grande' data-a='empezar'>▶ EMPEZAR</button></div>";
   }else{
    h+="</div><div class='sec'><div class='rot'>Tiempo jugado</div><div class='reloj' data-r></div><div class='sub'>Tiempo: <span data-ct></span></div>";
@@ -133,12 +133,13 @@ document.getElementById("mesas").addEventListener("input",function(ev){
  if(ev.target.hasAttribute("data-p")){
   var n=ev.target.closest("[data-n]").getAttribute("data-n"),m=M(n);
   m.precio=Math.max(0,parseFloat(ev.target.value)||0);guardar();tick();
+  if(m.precio>0){avisoMesa=null;var av=ev.target.closest("[data-n]").querySelector(".aviso");if(av)av.remove()}
  }
 });
 document.getElementById("mesas").addEventListener("click",function(ev){
  var b=ev.target.closest("[data-a]");if(!b)return;
  var d=b.closest("[data-n]"),n=d.getAttribute("data-n"),m=M(n),a=b.getAttribute("data-a");
- if(a==="empezar"){m.acc=0;m.start=Date.now();m.pausada=false;m.bebSi=false;m.beb=[]}
+ if(a==="empezar"){if(!(m.precio>0)){avisoMesa=n;dibujar();return}avisoMesa=null;m.acc=0;m.start=Date.now();m.pausada=false;m.bebSi=false;m.beb=[]}
  else if(a==="pausar"){m.acc=ms(m);m.start=null;m.pausada=true}
  else if(a==="seguir"){m.start=Date.now();m.pausada=false;confirmando=null}
  else if(a==="bsi")m.bebSi=true;
