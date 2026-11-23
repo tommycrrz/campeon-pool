@@ -78,7 +78,7 @@ input[type=text]{width:100%;min-width:0;font-size:24px;padding:6px 10px;border:2
 var NOMBRES=["Mesa 5","Mesa 6","Mesa 7","Mesa 8","Villa 1","Villa 2","Villa 3","Snooker","Carambola"];
 var KEY="pelusa-mesas-v2",KEYR="pelusa-registro-v1",S={};
 try{var g=localStorage.getItem(KEY);if(g){var p=JSON.parse(g);if(p&&typeof p==="object")S=p}}catch(e){}
-var confirmando=null,filtro="todas",avisoMesa=null,vista="mesas",selBeb={},confBeb=null,avisoAdm="";
+var confirmando=null,filtro="todas",avisoMesa=null,vista="mesas",selBeb={},confBeb=null,avisoAdm="",pagoSel={};
 var KEYB="pelusa-bebidas-v1",BD=[];
 try{var gb=localStorage.getItem(KEYB);if(gb){var pb=JSON.parse(gb);if(Array.isArray(pb))BD=pb}}catch(e){}
 function guardar(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
@@ -119,20 +119,23 @@ function administrar(){
 }
 function dia(t){return new Date(t).toLocaleDateString("en-CA",{timeZone:"America/Argentina/Buenos_Aires"})}
 function leer(){try{var r=JSON.parse(localStorage.getItem(KEYR));return Array.isArray(r)?r:[]}catch(e){return[]}}
-function anotar(m,n){var r=leer(),lim=Date.now()-90*864e5;r.push({n:n,ini:m.ini,fin:m.fin,ms:ms(m),t:Math.round(costoTiempo(m)),b:bebTotal(m),it:m.bebSi?m.beb.map(norm):[],ts:Date.now()});r=r.filter(function(x){return x.ts>lim});try{localStorage.setItem(KEYR,JSON.stringify(r))}catch(e){}}
+function anotar(m,n){var r=leer(),lim=Date.now()-90*864e5;r.push({n:n,ini:m.ini,fin:m.fin,ms:ms(m),t:Math.round(costoTiempo(m)),b:bebTotal(m),it:m.bebSi?m.beb.map(norm):[],pago:pagoSel[n]||null,ts:Date.now()});r=r.filter(function(x){return x.ts>lim});try{localStorage.setItem(KEYR,JSON.stringify(r))}catch(e){}}
 function fil(a,b){return "<div class='fila' style='margin:6px 0'><span class='rot' style='margin:0'>"+a+"</span><span class='sub' style='margin:0'>"+b+"</span></div>"}
 function registro(){
  var c=document.getElementById("mesas"),hoy=dia(Date.now()),T=0,B=0;
  var L=leer().filter(function(x){return dia(x.ts)===hoy}).reverse();
  L.forEach(function(x){T+=x.t;B+=x.b});
+ var PE=0,PT=0,PS=0;
+ L.forEach(function(x){var s=x.t+x.b;if(x.pago==="efectivo")PE+=s;else if(x.pago==="transferencia")PT+=s;else PS+=s});
+ var pagos="<div class='sec'><div class='rot'>Formas de pago</div>"+fil("Efectivo",pesos(PE))+fil("Transferencia",pesos(PT))+(PS?fil("Sin especificar",pesos(PS)):"")+"</div>";
  var A=Object.create(null),K=[];
  L.forEach(function(x){if(x.it&&x.it.length){x.it.forEach(function(i){if(!A[i.n]){A[i.n]={q:0,m:0};K.push(i.n)}A[i.n].q++;A[i.n].m+=i.p})}else if(x.b>0){var k="Sin detalle";if(!A[k]){A[k]={q:0,m:0};K.push(k)}A[k].m+=x.b}});
  K.sort();
  var vend=K.length?"<div class='sec'><div class='rot'>Bebidas vendidas</div>"+K.map(function(k){return fil(esc(k)+(A[k].q?" × "+A[k].q:""),pesos(A[k].m))}).join("")+fil("Total en bebidas",pesos(B))+"</div>":"";
  var f=new Date().toLocaleDateString("es-AR",{timeZone:"America/Argentina/Buenos_Aires",weekday:"long",day:"numeric",month:"long"});
- var h="<div class='mesa run'><div class='cab'><h2>HOY</h2><span class='est'>"+f+"</span></div><div class='sec'><div class='total'><small>TOTAL DEL DÍA</small><b>"+pesos(T+B)+"</b></div></div><div class='sec'>"+fil("Mesas cobradas",L.length)+fil("Tiempo de mesas",pesos(T))+fil("Bebidas",pesos(B))+"</div>"+vend+"</div>";
+ var h="<div class='mesa run'><div class='cab'><h2>HOY</h2><span class='est'>"+f+"</span></div><div class='sec'><div class='total'><small>TOTAL DEL DÍA</small><b>"+pesos(T+B)+"</b></div></div><div class='sec'>"+fil("Mesas cobradas",L.length)+fil("Tiempo de mesas",pesos(T))+fil("Bebidas",pesos(B))+"</div>"+pagos+vend+"</div>";
  if(!L.length)h+="<div class='vacio'>TODAVÍA NO SE COBRÓ NINGUNA MESA HOY</div>";
- L.forEach(function(x){h+="<div class='mesa'><div class='cab'><h2>"+x.n+"</h2><span class='est' style='font-size:20px'>"+pesos(x.t+x.b)+"</span></div><div class='sec'>"+fil("Entró",x.ini?hora(x.ini):"--:--")+fil("Salió",x.fin?hora(x.fin):"--:--")+fil("Tiempo jugado",reloj(x.ms))+fil("Tiempo",pesos(x.t))+fil("Bebidas",pesos(x.b))+"</div></div>"});
+ L.forEach(function(x){h+="<div class='mesa'><div class='cab'><h2>"+x.n+"</h2><span class='est' style='font-size:20px'>"+pesos(x.t+x.b)+"</span></div><div class='sec'>"+fil("Entró",x.ini?hora(x.ini):"--:--")+fil("Salió",x.fin?hora(x.fin):"--:--")+fil("Tiempo jugado",reloj(x.ms))+fil("Tiempo",pesos(x.t))+fil("Bebidas",pesos(x.b))+(x.pago?fil("Pago",x.pago==="efectivo"?"Efectivo":"Transferencia"):"")+"</div></div>"});
  c.innerHTML=h;
 }
 function dibujar(){
@@ -159,7 +162,7 @@ function dibujar(){
    }
    h+="</div><div class='sec'><div class='total'><small>TOTAL A COBRAR</small><b data-t></b></div></div>";
    if(confirmando===n){
-    h+="<div class='sec'><div class='conf'><p>¿Ya pagaron? Se borra esta cuenta.</p><button class='si' data-a='si'>SÍ, LIBERAR</button><button data-a='no'>NO, VOLVER</button></div></div>";
+    h+=!pagoSel[n]?"<div class='sec'><div class='conf'><p>¿CÓMO PAGARON?</p><button style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)' data-a='pagoe'>EFECTIVO</button><button style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)' data-a='pagot'>TRANSFERENCIA</button><button style='grid-column:1/-1' data-a='no'>NO, VOLVER</button></div></div>":"<div class='sec'><div class='conf'><p>PAGO: "+(pagoSel[n]==="efectivo"?"EFECTIVO":"TRANSFERENCIA")+"</p><p>¿Liberar la mesa? Se borra esta cuenta.</p><button class='si' data-a='si'>SÍ, LIBERAR</button><button data-a='no'>NO, VOLVER</button></div></div>";
    }else if(e==="pau"){
     h+="<div class='sec'><button class='liberar' data-a='liberar'>✔ PAGARON · DEJAR MESA LIBRE</button></div>";
    }
@@ -209,9 +212,11 @@ document.getElementById("mesas").addEventListener("click",function(ev){
  else if(a==="agregar"){var sv=d.querySelector("[data-s]");if(!sv)return;var bd=BD.filter(function(x){return x.id===sv.value})[0];if(!bd)return;m.beb.push({n:bd.nombre||"Sin nombre",p:bd.precio});selBeb[n]=bd.id}
  else if(a==="quitar"){var qi=parseInt(b.getAttribute("data-i"),10);if(qi>=0&&qi<m.beb.length)m.beb.splice(qi,1)}
  else if(a==="undo")m.beb.pop();
- else if(a==="liberar")confirmando=n;
- else if(a==="no")confirmando=null;
- else if(a==="si"){anotar(m,n);m.ini=null;m.fin=null;m.acc=0;m.start=null;m.pausada=false;m.bebSi=false;m.beb=[];confirmando=null}
+ else if(a==="liberar"){confirmando=n;pagoSel[n]=null}
+ else if(a==="pagoe")pagoSel[n]="efectivo";
+ else if(a==="pagot")pagoSel[n]="transferencia";
+ else if(a==="no"){confirmando=null;pagoSel[n]=null}
+ else if(a==="si"){if(!pagoSel[n])return;anotar(m,n);pagoSel[n]=null;m.ini=null;m.fin=null;m.acc=0;m.start=null;m.pausada=false;m.bebSi=false;m.beb=[];confirmando=null}
  guardar();dibujar();
 });
 document.addEventListener("visibilitychange",function(){if(!document.hidden)tick()});
