@@ -65,6 +65,15 @@ input[type=number]{width:100%;min-width:0;font-size:24px;font-weight:bold;paddin
 .vacio{text-align:center;font-size:26px;color:var(--suave);padding:30px 0}
 select{flex:1;min-width:0;font:inherit;text-transform:uppercase;letter-spacing:inherit;font-size:20px;min-height:52px;padding:6px 10px;border:2px solid var(--bronce);border-radius:8px;background:#fff;color:var(--tinta)}
 input[type=text]{width:100%;min-width:0;font-size:24px;padding:6px 10px;border:2px solid var(--bronce);border-radius:8px;background:#fff;color:var(--tinta)}
+@media (min-width:700px){
+body{max-width:1500px;margin:0 auto;padding:20px 28px}
+#mesas{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;align-items:start}
+#mesas>.mesa{margin-bottom:0}
+#mesas>.vacio{grid-column:1/-1}
+#mesas>.mesa:only-child{grid-column:1/-1;width:100%;max-width:640px;justify-self:center}
+#adm,#reg{display:block;max-width:420px;margin-left:auto!important;margin-right:auto!important}
+}
+@media (min-width:1100px){#mesas{grid-template-columns:repeat(3,1fr)}}
 </style>
 </head>
 <body>
