@@ -71,7 +71,7 @@ body{max-width:1500px;margin:0 auto;padding:20px 28px}
 #mesas>.mesa{margin-bottom:0}
 #mesas>.vacio{grid-column:1/-1}
 #mesas>.mesa:only-child{grid-column:1/-1;width:100%;max-width:640px;justify-self:center}
-#adm,#reg,#pen{display:block;max-width:420px;margin-left:auto!important;margin-right:auto!important}
+#adm,#reg,#pen,#stk{display:block;max-width:420px;margin-left:auto!important;margin-right:auto!important}
 }
 @media (min-width:1100px){#mesas{grid-template-columns:repeat(3,1fr)}}
 /* Animaciones y microinteracciones */
@@ -111,6 +111,7 @@ button:disabled{opacity:.4;pointer-events:none}
 <div class="top"><h1>CAMPEON</h1><button id="filtro" class="filtro">VER: TODAS</button></div>
 <div class="resumen" id="resumen"></div>
 <button id="adm" class="filtro" style="width:100%;font-size:20px;min-height:52px;margin:0 0 10px">ADMINISTRAR BEBIDAS</button>
+<button id="stk" class="filtro" style="width:100%;font-size:20px;min-height:52px;margin:0 0 10px">STOCK</button>
 <button id="pen" class="filtro" style="width:100%;font-size:20px;min-height:52px;margin:0 0 10px">PENDIENTES</button>
 <button id="reg" class="filtro" style="width:100%;font-size:20px;min-height:52px;margin:0 0 20px">REGISTRO DEL DÍA</button>
 <div id="mesas"></div>
@@ -123,7 +124,8 @@ var KEY="pelusa-mesas-v2",KEYR="pelusa-registro-v1",S={};
 try{var g=localStorage.getItem(KEY);if(g){var p=JSON.parse(g);if(p&&typeof p==="object")S=p}}catch(e){}
 var confirmando=null,filtro="todas",avisoMesa=null,vista="mesas",selBeb={},confBeb=null,avisoAdm="",pagoSel={};
 var diaSel=null,cobrando=null,avisoDeu=null,pend={},prevEst={},ANI={},DURN=450,tmrT=null,tmrE=null;
-var KEYB="pelusa-bebidas-v1",BD=[],KEYD="pelusa-deudas-v1",DD=[],KEYG="pelusa-grupos-v1",GG=[],gw=null,cobG=null,delG=null;
+var KEYB="pelusa-bebidas-v1",BD=[],KEYD="pelusa-deudas-v1",DD=[],KEYG="pelusa-grupos-v1",GG=[],gw=null,cobG=null,delG=null,stkForm=null,KEYS="pelusa-stock-v1",MOV=[];
+try{var sv0=localStorage.getItem(KEYS);if(sv0){var psv=JSON.parse(sv0);if(Array.isArray(psv))MOV=psv}}catch(e){}
 try{var gg0=localStorage.getItem(KEYG);if(gg0){var pgg=JSON.parse(gg0);if(Array.isArray(pgg))GG=pgg}}catch(e){}
 try{var gd=localStorage.getItem(KEYD);if(gd){var pdd=JSON.parse(gd);if(Array.isArray(pdd))DD=pdd}}catch(e){}
 try{var gb=localStorage.getItem(KEYB);if(gb){var pb=JSON.parse(gb);if(Array.isArray(pb))BD=pb}}catch(e){}
@@ -145,7 +147,7 @@ function costoTiempo(m){return m.precio*bloques(m)/4}
 function norm(x){return typeof x==="number"?{n:"Otros",p:x}:x}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]})}
 function guardarB(){try{localStorage.setItem(KEYB,JSON.stringify(BD))}catch(e){}}
-function opcionesBeb(n){return BD.map(function(x){return "<option value='"+esc(x.id)+"'"+(selBeb[n]===x.id?" selected":"")+">"+esc(x.nombre||"Sin nombre")+" — "+pesos(x.precio)+"</option>"}).join("")}
+function opcionesBeb(n){return BD.map(function(x){return "<option value='"+esc(x.id)+"'"+(selBeb[n]===x.id?" selected":"")+">"+esc(x.nombre||"Sin nombre")+" — "+pesos(x.precio)+(typeof x.stock==="number"?(x.stock>0?" · QUEDAN "+x.stock:" · SIN STOCK"):"")+"</option>"}).join("")}
 function lineasBeb(m){
  var G=[],ix={};
  m.beb.forEach(function(x,i){var o=norm(x),k=o.n+"|"+o.p;if(ix[k]===undefined){ix[k]=G.length;G.push({n:o.n,p:o.p,q:0,last:i})}var g=G[ix[k]];g.q++;g.last=i});
@@ -181,7 +183,7 @@ function aviso(t){var c=document.getElementById("avisos");c.innerHTML="";var d=d
 function entrar(){var c=document.getElementById("mesas");c.classList.remove("anim");void c.offsetWidth;c.classList.add("anim");clearTimeout(tmrE);tmrE=setTimeout(function(){c.classList.remove("anim")},800)}
 function mover(s,d){return new Date(new Date(s+"T12:00:00Z").getTime()+d*864e5).toISOString().slice(0,10)}
 function exportar(){
- var datos={app:"campeon",version:1,fecha:new Date().toISOString(),bebidas:BD,registro:leer(),deudas:DD,grupos:GG};
+ var datos={app:"campeon",version:1,fecha:new Date().toISOString(),bebidas:BD,registro:leer(),deudas:DD,grupos:GG,stock:MOV};
  var txt=JSON.stringify(datos),nombre="campeon-copia-"+dia(Date.now())+".json",f=null;
  try{f=new File([txt],nombre,{type:"application/json"})}catch(e){}
  if(f&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:"Copia de CAMPEON"}).catch(function(){});return}
@@ -201,9 +203,10 @@ function importar(txt){
     pago:x.pago==="efectivo"||x.pago==="transferencia"||x.pago==="pendiente"?x.pago:null,deu:x.deu&&typeof x.deu.nombre==="string"?{nombre:x.deu.nombre}:undefined,ts:x.ts});
   });
   BD.forEach(function(x){ids[x.id]=1});
-  d.bebidas.forEach(function(x){if(x&&typeof x.id==="string"&&typeof x.nombre==="string"&&typeof x.precio==="number"&&!ids[x.id]){ids[x.id]=1;BD.push({id:x.id,nombre:x.nombre,precio:x.precio})}});
+  d.bebidas.forEach(function(x){if(x&&typeof x.id==="string"&&typeof x.nombre==="string"&&typeof x.precio==="number"&&!ids[x.id]){ids[x.id]=1;BD.push({id:x.id,nombre:x.nombre,precio:x.precio,stock:typeof x.stock==="number"?x.stock:null})}});
   if(Array.isArray(d.deudas)){var di={};DD.forEach(function(x){di[x.id]=1});d.deudas.forEach(function(x){if(x&&typeof x.id==="string"&&typeof x.nombre==="string"&&typeof x.monto==="number"&&typeof x.ts==="number"&&!di[x.id]){di[x.id]=1;DD.push({id:x.id,nombre:x.nombre,tel:typeof x.tel==="string"?x.tel:"",nota:typeof x.nota==="string"?x.nota:"",mesa:typeof x.mesa==="string"?x.mesa:"",monto:x.monto,ts:x.ts,pagada:!!x.pagada,metodo:x.metodo==="efectivo"||x.metodo==="transferencia"?x.metodo:null,pts:typeof x.pts==="number"?x.pts:null})}});guardarD()}
   if(Array.isArray(d.grupos)){d.grupos.forEach(function(g0){var g=limpiarGrupo(g0);if(!g)return;var ex=GG.filter(function(x){return x.id===g.id})[0];if(!ex){GG.push(g);return}g.integrantes.forEach(function(it){var e2=ex.integrantes.filter(function(x){return x.id===it.id})[0];if(!e2){ex.integrantes.push(it);return}var idp={};e2.pagos.forEach(function(p){idp[p.id]=1});it.pagos.forEach(function(p){if(!idp[p.id]){idp[p.id]=1;e2.pagos.push(p)}})})});guardarG()}
+  if(Array.isArray(d.stock)){var im={};MOV.forEach(function(x){im[x.id]=1});d.stock.forEach(function(x){if(x&&typeof x.id==="string"&&!im[x.id]&&typeof x.bid==="string"&&typeof x.cant==="number"&&typeof x.ts==="number"&&(x.tipo==="entrada"||x.tipo==="salida")){im[x.id]=1;MOV.push({id:x.id,bid:x.bid,n:String(x.n||""),tipo:x.tipo,cant:x.cant,motivo:String(x.motivo||""),mesa:String(x.mesa||""),ts:x.ts})}});MOV.sort(function(a,b){return a.ts-b.ts});MOV=MOV.slice(-300);guardarS()}
   R.sort(function(a,b){return a.ts-b.ts});
   localStorage.setItem(KEYR,JSON.stringify(R));guardarB();
   if(vista==="registro")registro();
@@ -291,7 +294,7 @@ function abrirWizard(total,mesa,desde){
  var lim=mover(dia(Date.now()),7);
  gw={total:total,mesa:mesa,desde:desde,lim:lim,err:"",pers:[{nombre:"",tel:"",parte:0,lim:lim},{nombre:"",tel:"",parte:0,lim:lim}]};
  partir();vista="nuevo";confirmando=null;
- ["adm","reg","pen"].forEach(function(id){document.getElementById(id).style.display="none"});
+ ["adm","stk","reg","pen"].forEach(function(id){document.getElementById(id).style.display="none"});
  document.getElementById("filtro").style.visibility="hidden";
  dibujar();entrar();window.scrollTo(0,0);
 }
@@ -310,9 +313,39 @@ function nuevo(){
  h+="<div class='sec'><div class='total'><small>SUMA DE LAS PARTES</small><b data-gres>"+pesos(s)+"</b></div><div class='aviso' data-gdif>"+(d===0?"":(d>0?"FALTAN "+pesos(d)+" PARA COMPLETAR EL TOTAL":"SE PASAN "+pesos(-d)+" DEL TOTAL"))+"</div>"+(g.err?"<div class='aviso'>"+g.err+"</div>":"")+"<button class='chico' style='width:100%;margin-top:10px' data-a='g-igual'>DIVIDIR IGUAL</button><button class='grande' "+verde+" data-a='g-ok'>CONFIRMAR DIVISIÓN</button><button style='width:100%;margin-top:10px' data-a='g-no'>CANCELAR</button></div></div>";
  c.innerHTML=h;
 }
+function guardarS(){try{localStorage.setItem(KEYS,JSON.stringify(MOV))}catch(e){}}
+function ajustarStock(id,delta,tipo,motivo,mesa){
+ var b=BD.filter(function(x){return x.id===id})[0];
+ if(!b||typeof b.stock!=="number")return;
+ b.stock+=delta;
+ MOV.push({id:uid(),bid:id,n:b.nombre||"Sin nombre",tipo:tipo,cant:Math.abs(delta),motivo:motivo,mesa:mesa||"",ts:Date.now()});
+ if(MOV.length>300)MOV=MOV.slice(-300);
+ guardarB();guardarS();
+}
+function stockVista(){
+ var c=document.getElementById("mesas"),verde="style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)'";
+ var h="<div class='mesa'><div class='cab'><h2>STOCK</h2><span class='est'>"+BD.length+" BEBIDAS</span></div>";
+ if(!BD.length)h+="<div class='sec'><div class='vacio' style='padding:10px 0'>PRIMERO CARGÁ LAS BEBIDAS EN ADMINISTRAR BEBIDAS</div></div>";
+ BD.forEach(function(x){
+  var tr=typeof x.stock==="number",f=stkForm&&stkForm.id===x.id?stkForm:null;
+  h+="<div class='sec' data-sid='"+esc(x.id)+"'><div class='fila' style='margin:0 0 6px'><span class='sub' style='text-align:left;margin:0'>"+esc(x.nombre||"Sin nombre")+"</span><span class='reloj' style='font-size:40px;"+(tr&&x.stock<=0?"color:var(--rojo)":"")+"'>"+(tr?x.stock:"—")+"</span></div>";
+  if(!tr)h+="<div class='anotado' style='margin:0 0 8px'>SIN CONTROL DE STOCK. CARGÁ UNA ENTRADA PARA EMPEZAR.</div>";
+  else if(x.stock<0)h+="<div class='aviso' style='margin:0 0 8px;text-align:left'>REVISAR: HAY VENTAS SIN ENTRADA CARGADA</div>";
+  if(f){
+   h+="<div class='rot' style='margin:6px 0'>"+(f.tipo==="entrada"?"Entrada: cantidad que ingresa":"Salida: cantidad que sale")+"</div><input type='number' inputmode='numeric' min='1' placeholder='CANTIDAD' data-sc value='"+esc(f.val)+"'>"+(f.err?"<div class='aviso'>"+f.err+"</div>":"")+"<div class='conf' style='margin-top:10px'><button "+(f.tipo==="entrada"?verde:"class='si'")+" data-a='st-ok'>CONFIRMAR "+(f.tipo==="entrada"?"ENTRADA":"SALIDA")+"</button><button data-a='st-no'>CANCELAR</button></div>";
+  }else h+="<div class='dos'><button "+verde+" data-a='st-ent'>ENTRADA</button>"+(tr?"<button data-a='st-sal'>SALIDA</button>":"")+"</div>";
+  h+="</div>";
+ });
+ h+="</div>";
+ var M2=MOV.slice(-30).reverse();
+ h+="<div class='mesa'><div class='cab'><h2>MOVIMIENTOS</h2><span class='est'>ÚLTIMOS "+M2.length+"</span></div><div class='sec'>";
+ if(!M2.length)h+="<div class='anotado' style='margin:0'>TODAVÍA NO HAY MOVIMIENTOS</div>";
+ else h+="<div class='anotado' style='margin:0'>"+M2.map(function(m){return fcorta(m.ts)+" · "+esc(m.n)+" · "+(m.tipo==="entrada"?"ENTRADA +":"SALIDA −")+m.cant+(m.motivo==="venta"?" · VENTA "+esc(m.mesa):m.motivo&&m.motivo.indexOf("devol")===0?" · DEVOLUCIÓN":"")}).join("<br>")+"</div>";
+ c.innerHTML=h+"</div></div>";
+}
 function dia(t){return new Date(t).toLocaleDateString("en-CA",{timeZone:"America/Argentina/Buenos_Aires"})}
 function leer(){try{var r=JSON.parse(localStorage.getItem(KEYR));return Array.isArray(r)?r:[]}catch(e){return[]}}
-function anotar(m,n){var r=leer(),lim=Date.now()-90*864e5;r.push({n:n,ini:m.ini,fin:m.fin,ms:ms(m),t:Math.round(costoTiempo(m)),b:bebTotal(m),it:m.bebSi?m.beb.map(norm):[],pago:pagoSel[n]||null,deu:pagoSel[n]==="pendiente"&&pend[n]?{nombre:pend[n].nombre}:undefined,ts:Date.now()});r=r.filter(function(x){return x.ts>lim});try{localStorage.setItem(KEYR,JSON.stringify(r))}catch(e){}}
+function anotar(m,n){var r=leer(),lim=Date.now()-90*864e5;r.push({n:n,ini:m.ini,fin:m.fin,ms:ms(m),t:Math.round(costoTiempo(m)),b:bebTotal(m),it:m.bebSi?m.beb.map(norm):[],pago:pagoSel[n]||null,deu:pagoSel[n]==="pendiente"&&pend[n]?{nombre:pend[n].nombre}:undefined,ts:Date.now()});r=r.filter(function(x){return x.ts>lim});if(!m.bebSi)m.beb.forEach(function(x){if(x&&x.i&&x.s)ajustarStock(x.i,1,"entrada","devolución",n)});try{localStorage.setItem(KEYR,JSON.stringify(r))}catch(e){}}
 function fil(a,b){return "<div class='fila' style='margin:6px 0'><span class='rot' style='margin:0'>"+a+"</span><span class='sub' style='margin:0'>"+b+"</span></div>"}
 function registro(){
  var c=document.getElementById("mesas"),hoy=diaSel||dia(Date.now()),esHoy=!diaSel,T=0,B=0;
@@ -341,6 +374,7 @@ function dibujar(){
  if(vista==="admin"){administrar();return}
  if(vista==="pend"){pendientes();return}
  if(vista==="nuevo"){nuevo();return}
+ if(vista==="stock"){stockVista();return}
  var c=document.getElementById("mesas");c.innerHTML="";var bt=document.getElementById("filtro");bt.textContent="VER: "+filtro.toUpperCase();bt.className="filtro"+(filtro==="todas"?"":" on");if(filtro!=="todas"&&!NOMBRES.some(function(n){var e=estado(M(n));return filtro==="ocupadas"?e!=="libre":e==="libre"})){c.innerHTML="<div class='vacio'>NO HAY MESAS "+filtro.toUpperCase()+"</div>"}
  NOMBRES.forEach(function(n){
   var m=M(n),e=estado(m),d=document.createElement("div");
@@ -401,6 +435,20 @@ document.getElementById("mesas").addEventListener("click",function(ev){
  var b=ev.target.closest("[data-a]");if(!b)return;
  var a0=b.getAttribute("data-a");
 
+
+ if(a0.indexOf("st-")===0){
+  if(a0==="st-ent"||a0==="st-sal"){stkForm={id:b.closest("[data-sid]").getAttribute("data-sid"),tipo:a0==="st-ent"?"entrada":"salida",err:"",val:""}}
+  else if(a0==="st-no")stkForm=null;
+  else if(a0==="st-ok"&&stkForm){
+   var sx=b.closest("[data-sid]"),raws=sx.querySelector("[data-sc]").value,qs=Math.round(parseFloat(raws)),bb=BD.filter(function(x){return x.id===stkForm.id})[0];
+   stkForm.val=raws;
+   if(!bb)stkForm=null;
+   else if(!(qs>0))stkForm.err="ESCRIBÍ UNA CANTIDAD MAYOR A CERO";
+   else if(stkForm.tipo==="salida"&&qs>bb.stock)stkForm.err="NO PUEDE SUPERAR EL STOCK: "+bb.stock;
+   else{if(typeof bb.stock!=="number")bb.stock=0;ajustarStock(bb.id,stkForm.tipo==="entrada"?qs:-qs,stkForm.tipo,"manual","");aviso(stkForm.tipo==="entrada"?"Entrada registrada":"Salida registrada");stkForm=null}
+  }
+  stockVista();return;
+ }
  if(a0.indexOf("g-")===0){
   if(gw){
    if(a0==="g-mas"&&gw.pers.length<12){gw.pers.push({nombre:"",tel:"",parte:0,lim:gw.lim});partir();gw.err=""}
@@ -473,8 +521,8 @@ document.getElementById("mesas").addEventListener("click",function(ev){
  else if(a==="bsi")m.bebSi=true;
  else if(a==="bno")m.bebSi=false;
  else if(a==="sumar"){var v=parseFloat(d.querySelector("[data-b]").value);if(!(v>0))return;m.beb.push(v)}
- else if(a==="agregar"){var sv=d.querySelector("[data-s]");if(!sv)return;var bd=BD.filter(function(x){return x.id===sv.value})[0];if(!bd)return;m.beb.push({n:bd.nombre||"Sin nombre",p:bd.precio});selBeb[n]=bd.id;msg="Bebida agregada"}
- else if(a==="quitar"){var qi=parseInt(b.getAttribute("data-i"),10);if(qi>=0&&qi<m.beb.length){m.beb.splice(qi,1);msg="Bebida eliminada"}}
+ else if(a==="agregar"){var sv=d.querySelector("[data-s]");if(!sv)return;var bd=BD.filter(function(x){return x.id===sv.value})[0];if(!bd)return;m.beb.push({n:bd.nombre||"Sin nombre",p:bd.precio,i:bd.id,s:typeof bd.stock==="number"});ajustarStock(bd.id,-1,"salida","venta",n);selBeb[n]=bd.id;msg="Bebida agregada"}
+ else if(a==="quitar"){var qi=parseInt(b.getAttribute("data-i"),10);if(qi>=0&&qi<m.beb.length){var rm=m.beb.splice(qi,1)[0];if(rm&&rm.i&&rm.s)ajustarStock(rm.i,1,"entrada","devolución",n);msg="Bebida eliminada"}}
  else if(a==="undo")m.beb.pop();
  else if(a==="liberar"){confirmando=n;pagoSel[n]=null;pend[n]=null}
  else if(a==="pagoe")pagoSel[n]="efectivo";
@@ -491,10 +539,11 @@ document.addEventListener("visibilitychange",function(){if(!document.hidden)tick
 window.addEventListener("focus",tick);
 setInterval(tick,1000);
 document.getElementById("arch").addEventListener("change",function(ev){var f=ev.target.files&&ev.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){importar(String(r.result))};r.readAsText(f);ev.target.value=""});
-function nav(v){vista=vista===v?"mesas":v;confirmando=null;confBeb=null;avisoAdm="";diaSel=null;cobrando=null;var r=document.getElementById("reg"),a=document.getElementById("adm"),p=document.getElementById("pen");r.textContent=vista==="registro"?"VOLVER A LAS MESAS":"REGISTRO DEL DÍA";a.textContent=vista==="admin"?"VOLVER A LAS MESAS":"ADMINISTRAR BEBIDAS";r.style.display=vista==="mesas"||vista==="registro"?"":"none";a.style.display=vista==="mesas"||vista==="admin"?"":"none";p.style.display=vista==="mesas"||vista==="pend"?"":"none";etiqPen();document.getElementById("filtro").style.visibility=vista==="mesas"?"visible":"hidden";dibujar();entrar()}
+function nav(v){vista=vista===v?"mesas":v;confirmando=null;confBeb=null;avisoAdm="";diaSel=null;cobrando=null;cobG=null;delG=null;stkForm=null;var B={admin:["adm","ADMINISTRAR BEBIDAS"],registro:["reg","REGISTRO DEL DÍA"],stock:["stk","STOCK"],pend:["pen",null]};for(var k in B){var e=document.getElementById(B[k][0]);e.style.display=vista==="mesas"||vista===k?"":"none";if(B[k][1])e.textContent=vista===k?"VOLVER A LAS MESAS":B[k][1]}etiqPen();document.getElementById("filtro").style.visibility=vista==="mesas"?"visible":"hidden";dibujar();entrar()}
 document.getElementById("reg").addEventListener("click",function(){nav("registro")});
 document.getElementById("adm").addEventListener("click",function(){nav("admin")});
 document.getElementById("pen").addEventListener("click",function(){nav("pend")});
+document.getElementById("stk").addEventListener("click",function(){nav("stock")});
 document.getElementById("filtro").addEventListener("click",function(){filtro=filtro==="todas"?"ocupadas":filtro==="ocupadas"?"libres":"todas";confirmando=null;dibujar();entrar()});
 dibujar();entrar();
 </script>
