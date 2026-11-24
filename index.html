@@ -64,14 +64,14 @@ input[type=number]{width:100%;min-width:0;font-size:24px;font-weight:bold;paddin
 .filtro.on{background:var(--verdebtn);color:var(--crema);border-color:var(--verde)}
 .vacio{text-align:center;font-size:26px;color:var(--suave);padding:30px 0}
 select{flex:1;min-width:0;font:inherit;text-transform:uppercase;letter-spacing:inherit;font-size:20px;min-height:52px;padding:6px 10px;border:2px solid var(--bronce);border-radius:8px;background:#fff;color:var(--tinta)}
-input[type=text]{width:100%;min-width:0;font-size:24px;padding:6px 10px;border:2px solid var(--bronce);border-radius:8px;background:#fff;color:var(--tinta)}
+input[type=text],input[type=date]{width:100%;min-width:0;font-size:24px;padding:6px 10px;border:2px solid var(--bronce);border-radius:8px;background:#fff;color:var(--tinta)}
 @media (min-width:700px){
 body{max-width:1500px;margin:0 auto;padding:20px 28px}
 #mesas{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;align-items:start}
 #mesas>.mesa{margin-bottom:0}
 #mesas>.vacio{grid-column:1/-1}
 #mesas>.mesa:only-child{grid-column:1/-1;width:100%;max-width:640px;justify-self:center}
-#adm,#reg{display:block;max-width:420px;margin-left:auto!important;margin-right:auto!important}
+#adm,#reg,#pen{display:block;max-width:420px;margin-left:auto!important;margin-right:auto!important}
 }
 @media (min-width:1100px){#mesas{grid-template-columns:repeat(3,1fr)}}
 /* Animaciones y microinteracciones */
@@ -103,6 +103,7 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(168,128,31,.35)}
 #avisos{position:fixed;left:0;right:0;bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;padding:0 14px;pointer-events:none;z-index:50}
 .toast{background:var(--tinta);color:var(--crema);border:2px solid var(--bronce);border-radius:10px;padding:10px 16px;font-size:18px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,.3);animation:toast 2.2s ease both}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+button:disabled{opacity:.4;pointer-events:none}
 </style>
 
 </head>
@@ -110,17 +111,21 @@ input:focus,select:focus{outline:none;box-shadow:0 0 0 3px rgba(168,128,31,.35)}
 <div class="top"><h1>CAMPEON</h1><button id="filtro" class="filtro">VER: TODAS</button></div>
 <div class="resumen" id="resumen"></div>
 <button id="adm" class="filtro" style="width:100%;font-size:20px;min-height:52px;margin:0 0 10px">ADMINISTRAR BEBIDAS</button>
+<button id="pen" class="filtro" style="width:100%;font-size:20px;min-height:52px;margin:0 0 10px">PENDIENTES</button>
 <button id="reg" class="filtro" style="width:100%;font-size:20px;min-height:52px;margin:0 0 20px">REGISTRO DEL DÍA</button>
 <div id="mesas"></div>
 <div id="avisos" role="status" aria-live="polite"></div>
+<input type="file" id="arch" accept=".json,application/json" style="display:none">
 
 <script>
 var NOMBRES=["Mesa 5","Mesa 6","Mesa 7","Mesa 8","Villa 1","Villa 2","Villa 3","Snooker","Carambola"];
 var KEY="pelusa-mesas-v2",KEYR="pelusa-registro-v1",S={};
 try{var g=localStorage.getItem(KEY);if(g){var p=JSON.parse(g);if(p&&typeof p==="object")S=p}}catch(e){}
 var confirmando=null,filtro="todas",avisoMesa=null,vista="mesas",selBeb={},confBeb=null,avisoAdm="",pagoSel={};
-var prevEst={},ANI={},DURN=450,tmrT=null,tmrE=null;
-var KEYB="pelusa-bebidas-v1",BD=[];
+var diaSel=null,cobrando=null,avisoDeu=null,pend={},prevEst={},ANI={},DURN=450,tmrT=null,tmrE=null;
+var KEYB="pelusa-bebidas-v1",BD=[],KEYD="pelusa-deudas-v1",DD=[],KEYG="pelusa-grupos-v1",GG=[],gw=null,cobG=null,delG=null;
+try{var gg0=localStorage.getItem(KEYG);if(gg0){var pgg=JSON.parse(gg0);if(Array.isArray(pgg))GG=pgg}}catch(e){}
+try{var gd=localStorage.getItem(KEYD);if(gd){var pdd=JSON.parse(gd);if(Array.isArray(pdd))DD=pdd}}catch(e){}
 try{var gb=localStorage.getItem(KEYB);if(gb){var pb=JSON.parse(gb);if(Array.isArray(pb))BD=pb}}catch(e){}
 function guardar(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function M(n){
@@ -134,7 +139,8 @@ function dos(n){return (n<10?"0":"")+n}
 function hora(t){try{return new Date(t).toLocaleTimeString("es-AR",{timeZone:"America/Argentina/Buenos_Aires",hour:"2-digit",minute:"2-digit",hourCycle:"h23"})}catch(e){return dos(new Date(t).getHours())+":"+dos(new Date(t).getMinutes())}}
 function reloj(t){var s=Math.floor(t/1000),h=Math.floor(s/3600),mi=Math.floor(s%3600/60);return dos(h)+":"+dos(mi)+":"+dos(s%60)}
 function bebTotal(m){return m.bebSi?m.beb.reduce(function(a,b){return a+(typeof b==="number"?b:b.p)},0):0}
-function costoTiempo(m){return m.precio*ms(m)/3600000}
+function bloques(m){return Math.max(1,Math.ceil(ms(m)/900000))}
+function costoTiempo(m){return m.precio*bloques(m)/4}
 
 function norm(x){return typeof x==="number"?{n:"Otros",p:x}:x}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]})}
@@ -173,31 +179,168 @@ function numero(el,v,k){
 }
 function aviso(t){var c=document.getElementById("avisos");c.innerHTML="";var d=document.createElement("div");d.className="toast";d.textContent=t;c.appendChild(d);clearTimeout(tmrT);tmrT=setTimeout(function(){c.innerHTML=""},2300)}
 function entrar(){var c=document.getElementById("mesas");c.classList.remove("anim");void c.offsetWidth;c.classList.add("anim");clearTimeout(tmrE);tmrE=setTimeout(function(){c.classList.remove("anim")},800)}
+function mover(s,d){return new Date(new Date(s+"T12:00:00Z").getTime()+d*864e5).toISOString().slice(0,10)}
+function exportar(){
+ var datos={app:"campeon",version:1,fecha:new Date().toISOString(),bebidas:BD,registro:leer(),deudas:DD,grupos:GG};
+ var txt=JSON.stringify(datos),nombre="campeon-copia-"+dia(Date.now())+".json",f=null;
+ try{f=new File([txt],nombre,{type:"application/json"})}catch(e){}
+ if(f&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:"Copia de CAMPEON"}).catch(function(){});return}
+ try{var u=URL.createObjectURL(new Blob([txt],{type:"application/json"})),a=document.createElement("a");a.href=u;a.download=nombre;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},1500);aviso("Copia guardada")}catch(e){aviso("No se pudo guardar la copia")}
+}
+function importar(txt){
+ try{
+  var d=JSON.parse(txt);
+  if(!d||d.app!=="campeon"||!Array.isArray(d.registro)||!Array.isArray(d.bebidas))throw 0;
+  var R=leer(),ya={},nr=0,ids={};
+  R.forEach(function(x){ya[x.ts+"|"+x.n]=1});
+  d.registro.forEach(function(x){
+   if(!x||typeof x.ts!=="number"||typeof x.n!=="string"||typeof x.t!=="number"||typeof x.b!=="number"||ya[x.ts+"|"+x.n])return;
+   ya[x.ts+"|"+x.n]=1;nr++;
+   R.push({n:x.n,ini:typeof x.ini==="number"?x.ini:null,fin:typeof x.fin==="number"?x.fin:null,ms:typeof x.ms==="number"?x.ms:0,t:x.t,b:x.b,
+    it:Array.isArray(x.it)?x.it.filter(function(i){return i&&typeof i.n==="string"&&typeof i.p==="number"}):[],
+    pago:x.pago==="efectivo"||x.pago==="transferencia"||x.pago==="pendiente"?x.pago:null,deu:x.deu&&typeof x.deu.nombre==="string"?{nombre:x.deu.nombre}:undefined,ts:x.ts});
+  });
+  BD.forEach(function(x){ids[x.id]=1});
+  d.bebidas.forEach(function(x){if(x&&typeof x.id==="string"&&typeof x.nombre==="string"&&typeof x.precio==="number"&&!ids[x.id]){ids[x.id]=1;BD.push({id:x.id,nombre:x.nombre,precio:x.precio})}});
+  if(Array.isArray(d.deudas)){var di={};DD.forEach(function(x){di[x.id]=1});d.deudas.forEach(function(x){if(x&&typeof x.id==="string"&&typeof x.nombre==="string"&&typeof x.monto==="number"&&typeof x.ts==="number"&&!di[x.id]){di[x.id]=1;DD.push({id:x.id,nombre:x.nombre,tel:typeof x.tel==="string"?x.tel:"",nota:typeof x.nota==="string"?x.nota:"",mesa:typeof x.mesa==="string"?x.mesa:"",monto:x.monto,ts:x.ts,pagada:!!x.pagada,metodo:x.metodo==="efectivo"||x.metodo==="transferencia"?x.metodo:null,pts:typeof x.pts==="number"?x.pts:null})}});guardarD()}
+  if(Array.isArray(d.grupos)){d.grupos.forEach(function(g0){var g=limpiarGrupo(g0);if(!g)return;var ex=GG.filter(function(x){return x.id===g.id})[0];if(!ex){GG.push(g);return}g.integrantes.forEach(function(it){var e2=ex.integrantes.filter(function(x){return x.id===it.id})[0];if(!e2){ex.integrantes.push(it);return}var idp={};e2.pagos.forEach(function(p){idp[p.id]=1});it.pagos.forEach(function(p){if(!idp[p.id]){idp[p.id]=1;e2.pagos.push(p)}})})});guardarG()}
+  R.sort(function(a,b){return a.ts-b.ts});
+  localStorage.setItem(KEYR,JSON.stringify(R));guardarB();
+  if(vista==="registro")registro();
+  aviso("Copia restaurada ("+nr+" cobros nuevos)");
+ }catch(e){aviso("El archivo no es una copia válida")}
+}
+function guardarD(){try{localStorage.setItem(KEYD,JSON.stringify(DD))}catch(e){}}
+function crearDeuda(m,n){var p=pend[n]||{};DD.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),nombre:p.nombre||"Sin nombre",tel:p.tel||"",nota:p.nota||"",mesa:n,monto:Math.round(costoTiempo(m)+bebTotal(m)),ts:Date.now(),pagada:false,metodo:null,pts:null});guardarD()}
+function pagoTxt(x){return x.pago==="efectivo"?"Efectivo":x.pago==="transferencia"?"Transferencia":x.pago==="pendiente"?"Pendiente"+(x.deu&&x.deu.nombre?" · "+esc(x.deu.nombre):""):"—"}
+function etiqPen(){var k=DD.filter(function(x){return !x.pagada}).length;GG.forEach(function(g){g.integrantes.forEach(function(it){if(saldo(it)>0)k++})});document.getElementById("pen").textContent=vista==="pend"?"VOLVER A LAS MESAS":"PENDIENTES"+(k?" ("+k+")":"")}
+function pendientes(){
+ var c=document.getElementById("mesas"),A=DD.filter(function(x){return !x.pagada}).sort(function(a,b){return b.ts-a.ts}),tot=0;
+ var gp=0;A.forEach(function(x){tot+=x.monto});GG.forEach(function(g){g.integrantes.forEach(function(it){var s=saldo(it);tot+=s;if(s>0)gp++})});
+ var h="<div class='mesa'><div class='cab'><h2>PENDIENTES</h2><span class='est'>"+(A.length+gp)+"</span></div><div class='sec'><div class='total'><small>TOTAL QUE LE DEBEN</small><b>"+pesos(tot)+"</b></div></div></div>";
+ h+="<div style='grid-column:1/-1'><button class='grande' style='margin:0 0 6px;background:var(--verdebtn);color:var(--crema);border-color:var(--verde)' data-a='pen-nuevo'>+ NUEVA DEUDA COMPARTIDA</button></div>";
+ if(!A.length&&!GG.length)h+="<div class='vacio'>NO HAY PENDIENTES</div>";
+ var verde="style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)'";
+ A.forEach(function(x){
+  var f=new Date(x.ts).toLocaleDateString("es-AR",{timeZone:"America/Argentina/Buenos_Aires",day:"2-digit",month:"2-digit"})+" "+hora(x.ts);
+  var bt;
+  if(cobrando===x.id)bt="<div class='conf' style='margin-top:12px'><p>¿CÓMO PAGÓ?</p><button "+verde+" data-a='pen-e'>EFECTIVO</button><button "+verde+" data-a='pen-t'>TRANSFERENCIA</button><button style='grid-column:1/-1' data-a='pen-no'>NO, VOLVER</button></div>";
+  else if(cobrando==="del:"+x.id)bt="<div class='conf' style='margin-top:12px'><p>¿BORRAR ESTE PENDIENTE?</p><button class='si' data-a='pen-delsi'>SÍ, BORRAR</button><button data-a='pen-no'>NO, VOLVER</button></div>";
+  else bt="<div class='dos' style='margin-top:12px'><button "+verde+" data-a='pen-cobrar'>YA PAGÓ</button><button data-a='pen-del'>BORRAR</button></div>";
+  h+="<div class='mesa' data-id='"+esc(x.id)+"'><div class='cab'><h2>"+esc(x.nombre)+"</h2><span class='est' style='font-size:20px'>"+pesos(x.monto)+"</span></div><div class='sec'>"+fil("Mesa",esc(x.mesa))+fil("Fecha",f)+(x.tel?fil("Teléfono",esc(x.tel)):"")+(x.nota?fil("Nota",esc(x.nota)):"")+bt+"</div></div>";
+ });
+ GG.slice().sort(function(a,b){var pa=a.integrantes.some(function(x){return saldo(x)>0}),pb=b.integrantes.some(function(x){return saldo(x)>0});return pa===pb?b.ts-a.ts:(pa?-1:1)}).forEach(function(g){h+=tarjetaGrupo(g)});
+ c.innerHTML=h;
+}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function guardarG(){try{localStorage.setItem(KEYG,JSON.stringify(GG))}catch(e){}}
+function abonado(it){var s=0;it.pagos.forEach(function(p){s+=p.monto});return s}
+function saldo(it){return Math.max(0,it.parte-abonado(it))}
+function estIt(it){var ab=abonado(it),hs=dia(Date.now());
+ if(it.parte-ab<=0)return{t:"PAGADO",c:"var(--verde)"};
+ if(hs>it.limite)return{t:ab>0?"VENCIDO · PARCIAL":"VENCIDO",c:"var(--rojo)"};
+ if(ab>0)return{t:"PARCIAL",c:"var(--ambar)"};
+ return{t:"PENDIENTE",c:"var(--libre)"}}
+function fechaTxt(s){var p=String(s).split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:s}
+function fcorta(t){return new Date(t).toLocaleDateString("es-AR",{timeZone:"America/Argentina/Buenos_Aires",day:"2-digit",month:"2-digit"})+" "+hora(t)}
+function limpiarGrupo(g){
+ if(!g||typeof g.id!=="string"||typeof g.total!=="number"||!Array.isArray(g.integrantes))return null;
+ var ints=[];
+ g.integrantes.forEach(function(it){
+  if(!it||typeof it.id!=="string"||typeof it.nombre!=="string"||typeof it.parte!=="number"||typeof it.limite!=="string")return;
+  var pg=[];(Array.isArray(it.pagos)?it.pagos:[]).forEach(function(p){if(p&&typeof p.id==="string"&&typeof p.monto==="number"&&typeof p.ts==="number")pg.push({id:p.id,monto:p.monto,ts:p.ts,metodo:p.metodo==="efectivo"?"efectivo":"transferencia"})});
+  ints.push({id:it.id,nombre:it.nombre,tel:typeof it.tel==="string"?it.tel:"",parte:it.parte,limite:it.limite,pagos:pg});
+ });
+ return{id:g.id,total:g.total,ts:typeof g.ts==="number"?g.ts:Date.now(),mesa:typeof g.mesa==="string"?g.mesa:"",integrantes:ints};
+}
+function tarjetaGrupo(g){
+ var rec=0,pen=0,pag=0,verde="style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)'";
+ g.integrantes.forEach(function(it){rec+=abonado(it);pen+=saldo(it);if(saldo(it)===0)pag++});
+ var h="<div class='mesa' data-gid='"+esc(g.id)+"'><div class='cab'><h2>"+esc(g.mesa?"GRUPO · "+g.mesa:"DEUDA COMPARTIDA")+"</h2><span class='est' style='font-size:16px'>"+pag+"/"+g.integrantes.length+" PAGARON</span></div>";
+ h+="<div class='sec'>"+fil("Importe total",pesos(g.total))+fil("Recaudado",pesos(rec))+fil("Pendiente",pesos(pen))+fil("Integrantes",g.integrantes.length)+fil("Ya pagaron",pag)+fil("Creada",fcorta(g.ts))+"</div>";
+ g.integrantes.forEach(function(it){
+  var e=estIt(it),sa=saldo(it),ab=abonado(it);
+  h+="<div class='sec' data-iid='"+esc(it.id)+"'><div class='fila' style='margin:0 0 6px'><span class='sub' style='text-align:left;margin:0'>"+esc(it.nombre)+"</span><span class='est' style='background:"+e.c+";border-color:"+e.c+";color:#fff;font-size:15px'>"+e.t+"</span></div>";
+  h+=(it.tel?fil("Teléfono",esc(it.tel)):"")+fil("Asignado",pesos(it.parte))+fil("Abonado",pesos(ab))+fil("Saldo",pesos(sa))+fil("Fecha límite",fechaTxt(it.limite));
+  if(it.pagos.length)h+="<div class='anotado'>"+it.pagos.map(function(p){return fcorta(p.ts)+" · "+pesos(p.monto)+" · "+(p.metodo==="efectivo"?"EFECTIVO":"TRANSFERENCIA")}).join("<br>")+"</div>";
+  if(sa>0){
+   if(cobG&&cobG.iid===it.id){
+    h+="<div class='rot' style='margin:12px 0 6px'>Registrar pago (máximo "+pesos(sa)+")</div><input type='number' inputmode='numeric' min='0' placeholder='MONTO $' data-gm value='"+esc(cobG.monto!==""?cobG.monto:sa)+"'>"+(cobG.err?"<div class='aviso'>"+cobG.err+"</div>":"")+"<div class='conf' style='margin-top:10px'><button "+verde+" data-a='gp-e'>EFECTIVO</button><button "+verde+" data-a='gp-t'>TRANSFERENCIA</button><button style='grid-column:1/-1' data-a='gp-no'>CANCELAR</button></div>";
+   }else h+="<button class='grande' style='min-height:56px;font-size:20px' data-a='gp-pagar'>REGISTRAR PAGO</button>";
+  }
+  h+="</div>";
+ });
+ h+="<div class='sec'>";
+ if(delG===g.id)h+="<div class='conf'><p>¿BORRAR TODA ESTA DEUDA?"+(rec>0?" YA TIENE PAGOS REGISTRADOS.":"")+"</p><button class='si' data-a='gp-delsi'>SÍ, BORRAR</button><button data-a='gp-delno'>NO, VOLVER</button></div>";
+ else h+="<button class='chico' style='width:100%' data-a='gp-del'>BORRAR DEUDA COMPARTIDA</button>";
+ return h+"</div></div>";
+}
+function partir(){var n=gw.pers.length,base=Math.floor(gw.total/n),r=gw.total-base*n;gw.pers.forEach(function(p,j){p.parte=base+(j<r?1:0)})}
+function gwSuma(){var s=0;gw.pers.forEach(function(p){s+=p.parte});var d=gw.total-s,a=document.querySelector("[data-gres]"),b=document.querySelector("[data-gdif]");if(a)a.textContent=pesos(s);if(b)b.textContent=d===0?"":(d>0?"FALTAN "+pesos(d)+" PARA COMPLETAR EL TOTAL":"SE PASAN "+pesos(-d)+" DEL TOTAL")}
+function gwInput(t){
+ var k=t.getAttribute("data-g"),i=parseInt(t.getAttribute("data-gi"),10);
+ if(k==="total"){gw.total=Math.max(0,Math.round(parseFloat(t.value)||0));partir();document.querySelectorAll("[data-g='parte']").forEach(function(e){e.value=gw.pers[parseInt(e.getAttribute("data-gi"),10)].parte})}
+ else if(k==="lim"){gw.lim=t.value;gw.pers.forEach(function(p){p.lim=t.value});document.querySelectorAll("[data-g='plim']").forEach(function(e){e.value=t.value})}
+ else if(k==="nombre")gw.pers[i].nombre=t.value;
+ else if(k==="tel")gw.pers[i].tel=t.value;
+ else if(k==="parte")gw.pers[i].parte=Math.max(0,Math.round(parseFloat(t.value)||0));
+ else if(k==="plim")gw.pers[i].lim=t.value;
+ gwSuma();
+}
+function abrirWizard(total,mesa,desde){
+ var lim=mover(dia(Date.now()),7);
+ gw={total:total,mesa:mesa,desde:desde,lim:lim,err:"",pers:[{nombre:"",tel:"",parte:0,lim:lim},{nombre:"",tel:"",parte:0,lim:lim}]};
+ partir();vista="nuevo";confirmando=null;
+ ["adm","reg","pen"].forEach(function(id){document.getElementById(id).style.display="none"});
+ document.getElementById("filtro").style.visibility="hidden";
+ dibujar();entrar();window.scrollTo(0,0);
+}
+function cerrarWizard(dest){gw=null;vista="mesas";nav(dest==="pend"?"pend":"mesas")}
+function nuevo(){
+ var c=document.getElementById("mesas"),g=gw,s=0;
+ g.pers.forEach(function(p){s+=p.parte});
+ var d=g.total-s,verde="style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)'";
+ var h="<div class='mesa'><div class='cab'><h2>DEUDA COMPARTIDA</h2><span class='est'>"+g.pers.length+" PERSONAS</span></div>";
+ h+="<div class='sec'><div class='rot'>Importe total</div><label class='precio'><span>$</span><input type='number' inputmode='numeric' min='0' placeholder='0' value='"+(g.total||"")+"' data-g='total'></label></div>";
+ h+="<div class='sec'><div class='rot'>Cantidad de personas</div><div class='fila' style='justify-content:center;gap:18px'><button style='min-width:72px;font-size:30px' data-a='g-menos'>−</button><span class='reloj' style='font-size:40px'>"+g.pers.length+"</span><button style='min-width:72px;font-size:30px' data-a='g-mas'>+</button></div></div>";
+ h+="<div class='sec'><div class='rot'>Fecha límite de pago (para todos)</div><input type='date' value='"+esc(g.lim)+"' data-g='lim'></div>";
+ g.pers.forEach(function(p,i){
+  h+="<div class='sec'><div class='rot'>Persona "+(i+1)+"</div><input type='text' placeholder='NOMBRE' value='"+esc(p.nombre)+"' data-g='nombre' data-gi='"+i+"'><input type='text' inputmode='tel' placeholder='TELÉFONO' value='"+esc(p.tel)+"' data-g='tel' data-gi='"+i+"' style='margin-top:8px'><div class='rot' style='margin-top:10px'>Parte que paga</div><label class='precio'><span>$</span><input type='number' inputmode='numeric' min='0' value='"+p.parte+"' data-g='parte' data-gi='"+i+"'></label><div class='rot' style='margin-top:10px'>Fecha límite</div><input type='date' value='"+esc(p.lim)+"' data-g='plim' data-gi='"+i+"'></div>";
+ });
+ h+="<div class='sec'><div class='total'><small>SUMA DE LAS PARTES</small><b data-gres>"+pesos(s)+"</b></div><div class='aviso' data-gdif>"+(d===0?"":(d>0?"FALTAN "+pesos(d)+" PARA COMPLETAR EL TOTAL":"SE PASAN "+pesos(-d)+" DEL TOTAL"))+"</div>"+(g.err?"<div class='aviso'>"+g.err+"</div>":"")+"<button class='chico' style='width:100%;margin-top:10px' data-a='g-igual'>DIVIDIR IGUAL</button><button class='grande' "+verde+" data-a='g-ok'>CONFIRMAR DIVISIÓN</button><button style='width:100%;margin-top:10px' data-a='g-no'>CANCELAR</button></div></div>";
+ c.innerHTML=h;
+}
 function dia(t){return new Date(t).toLocaleDateString("en-CA",{timeZone:"America/Argentina/Buenos_Aires"})}
 function leer(){try{var r=JSON.parse(localStorage.getItem(KEYR));return Array.isArray(r)?r:[]}catch(e){return[]}}
-function anotar(m,n){var r=leer(),lim=Date.now()-90*864e5;r.push({n:n,ini:m.ini,fin:m.fin,ms:ms(m),t:Math.round(costoTiempo(m)),b:bebTotal(m),it:m.bebSi?m.beb.map(norm):[],pago:pagoSel[n]||null,ts:Date.now()});r=r.filter(function(x){return x.ts>lim});try{localStorage.setItem(KEYR,JSON.stringify(r))}catch(e){}}
+function anotar(m,n){var r=leer(),lim=Date.now()-90*864e5;r.push({n:n,ini:m.ini,fin:m.fin,ms:ms(m),t:Math.round(costoTiempo(m)),b:bebTotal(m),it:m.bebSi?m.beb.map(norm):[],pago:pagoSel[n]||null,deu:pagoSel[n]==="pendiente"&&pend[n]?{nombre:pend[n].nombre}:undefined,ts:Date.now()});r=r.filter(function(x){return x.ts>lim});try{localStorage.setItem(KEYR,JSON.stringify(r))}catch(e){}}
 function fil(a,b){return "<div class='fila' style='margin:6px 0'><span class='rot' style='margin:0'>"+a+"</span><span class='sub' style='margin:0'>"+b+"</span></div>"}
 function registro(){
- var c=document.getElementById("mesas"),hoy=dia(Date.now()),T=0,B=0;
+ var c=document.getElementById("mesas"),hoy=diaSel||dia(Date.now()),esHoy=!diaSel,T=0,B=0;
  var L=leer().filter(function(x){return dia(x.ts)===hoy}).reverse();
  L.forEach(function(x){T+=x.t;B+=x.b});
- var PE=0,PT=0,PS=0;
- L.forEach(function(x){var s=x.t+x.b;if(x.pago==="efectivo")PE+=s;else if(x.pago==="transferencia")PT+=s;else PS+=s});
- var pagos="<div class='sec'><div class='rot'>Formas de pago</div>"+fil("Efectivo",pesos(PE))+fil("Transferencia",pesos(PT))+(PS?fil("Sin especificar",pesos(PS)):"")+"</div>";
+ var PE=0,PT=0,PS=0,PP=0,DE=0,DT=0;
+ DD.forEach(function(x){if(x.pagada&&x.pts&&dia(x.pts)===hoy){if(x.metodo==="efectivo")DE+=x.monto;else if(x.metodo==="transferencia")DT+=x.monto}});
+ GG.forEach(function(g){g.integrantes.forEach(function(it){it.pagos.forEach(function(p){if(dia(p.ts)===hoy){if(p.metodo==="efectivo")DE+=p.monto;else DT+=p.monto}})})});
+ L.forEach(function(x){var s=x.t+x.b;if(x.pago==="efectivo")PE+=s;else if(x.pago==="transferencia")PT+=s;else if(x.pago==="pendiente")PP+=s;else PS+=s});
+ var pagos="<div class='sec'><div class='rot'>Formas de pago</div>"+fil("Efectivo",pesos(PE))+fil("Transferencia",pesos(PT))+(PP?fil("Pendiente",pesos(PP)):"")+(DE?fil("Deuda cobrada (efectivo)",pesos(DE)):"")+(DT?fil("Deuda cobrada (transferencia)",pesos(DT)):"")+(PS?fil("Sin especificar",pesos(PS)):"")+"</div>";
  var A=Object.create(null),K=[];
  L.forEach(function(x){if(x.it&&x.it.length){x.it.forEach(function(i){if(!A[i.n]){A[i.n]={q:0,m:0};K.push(i.n)}A[i.n].q++;A[i.n].m+=i.p})}else if(x.b>0){var k="Sin detalle";if(!A[k]){A[k]={q:0,m:0};K.push(k)}A[k].m+=x.b}});
  K.sort();
  var vend=K.length?"<div class='sec'><div class='rot'>Bebidas vendidas</div>"+K.map(function(k){return fil(esc(k)+(A[k].q?" × "+A[k].q:""),pesos(A[k].m))}).join("")+fil("Total en bebidas",pesos(B))+"</div>":"";
- var f=new Date().toLocaleDateString("es-AR",{timeZone:"America/Argentina/Buenos_Aires",weekday:"long",day:"numeric",month:"long"});
- var h="<div class='mesa run'><div class='cab'><h2>HOY</h2><span class='est'>"+f+"</span></div><div class='sec'><div class='total'><small>TOTAL DEL DÍA</small><b>"+pesos(T+B)+"</b></div></div><div class='sec'>"+fil("Mesas cobradas",L.length)+fil("Tiempo de mesas",pesos(T))+fil("Bebidas",pesos(B))+"</div>"+pagos+vend+"</div>";
- if(!L.length)h+="<div class='vacio'>TODAVÍA NO SE COBRÓ NINGUNA MESA HOY</div>";
- L.forEach(function(x){h+="<div class='mesa'><div class='cab'><h2>"+x.n+"</h2><span class='est' style='font-size:20px'>"+pesos(x.t+x.b)+"</span></div><div class='sec'>"+fil("Entró",x.ini?hora(x.ini):"--:--")+fil("Salió",x.fin?hora(x.fin):"--:--")+fil("Tiempo jugado",reloj(x.ms))+fil("Tiempo",pesos(x.t))+fil("Bebidas",pesos(x.b))+(x.pago?fil("Pago",x.pago==="efectivo"?"Efectivo":"Transferencia"):"")+"</div></div>"});
+ var f=new Date(hoy+"T12:00:00Z").toLocaleDateString("es-AR",{timeZone:"UTC",weekday:"long",day:"numeric",month:"long"});
+ var h="<div class='mesa run'><div class='cab'><h2>"+(esHoy?"HOY":"DÍA")+"</h2><span class='est'>"+f+"</span></div><div class='sec'><div class='dos'><button data-a='reg-prev'>◀ ANTERIOR</button><button data-a='reg-next'"+(esHoy?" disabled":"")+">SIGUIENTE ▶</button></div></div><div class='sec'><div class='total'><small>TOTAL DEL DÍA</small><b>"+pesos(T+B)+"</b></div></div><div class='sec'>"+fil("Mesas cobradas",L.length)+fil("Tiempo de mesas",pesos(T))+fil("Bebidas",pesos(B))+"</div>"+pagos+vend+"</div>";
+ if(!L.length)h+="<div class='vacio'>"+(esHoy?"TODAVÍA NO SE COBRÓ NINGUNA MESA HOY":"NO HAY COBROS ESE DÍA")+"</div>";
+ L.forEach(function(x){h+="<div class='mesa'><div class='cab'><h2>"+x.n+"</h2><span class='est' style='font-size:20px'>"+pesos(x.t+x.b)+"</span></div><div class='sec'>"+fil("Entró",x.ini?hora(x.ini):"--:--")+fil("Salió",x.fin?hora(x.fin):"--:--")+fil("Tiempo jugado",reloj(x.ms))+fil("Tiempo",pesos(x.t))+fil("Bebidas",pesos(x.b))+(x.pago?fil("Pago",pagoTxt(x)):"")+"</div></div>"});
+ h+="<div class='mesa'><div class='cab'><h2>COPIA DE SEGURIDAD</h2></div><div class='sec'><div class='anotado' style='margin:0 0 10px'>GUARDÁ UNA COPIA DEL REGISTRO, LAS BEBIDAS Y LOS PENDIENTES POR SI SE ROMPE O CAMBIA EL CELULAR.</div><div class='dos'><button style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)' data-a='reg-exp'>GUARDAR COPIA</button><button data-a='reg-imp'>RESTAURAR COPIA</button></div></div></div>";
  c.innerHTML=h;
 }
 function dibujar(){
  document.getElementById("mesas").classList.remove("anim");
+ etiqPen();
  if(vista==="registro"){registro();return}
  if(vista==="admin"){administrar();return}
+ if(vista==="pend"){pendientes();return}
+ if(vista==="nuevo"){nuevo();return}
  var c=document.getElementById("mesas");c.innerHTML="";var bt=document.getElementById("filtro");bt.textContent="VER: "+filtro.toUpperCase();bt.className="filtro"+(filtro==="todas"?"":" on");if(filtro!=="todas"&&!NOMBRES.some(function(n){var e=estado(M(n));return filtro==="ocupadas"?e!=="libre":e==="libre"})){c.innerHTML="<div class='vacio'>NO HAY MESAS "+filtro.toUpperCase()+"</div>"}
  NOMBRES.forEach(function(n){
   var m=M(n),e=estado(m),d=document.createElement("div");
@@ -220,7 +363,8 @@ function dibujar(){
    }
    h+="</div><div class='sec'><div class='total'><small>TOTAL A COBRAR</small><b data-t></b></div></div>";
    if(confirmando===n){
-    h+=!pagoSel[n]?"<div class='sec'><div class='conf'><p>¿CÓMO PAGARON?</p><button style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)' data-a='pagoe'>EFECTIVO</button><button style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)' data-a='pagot'>TRANSFERENCIA</button><button style='grid-column:1/-1' data-a='no'>NO, VOLVER</button></div></div>":"<div class='sec'><div class='conf'><p>PAGO: "+(pagoSel[n]==="efectivo"?"EFECTIVO":"TRANSFERENCIA")+"</p><p>¿Liberar la mesa? Se borra esta cuenta.</p><button class='si' data-a='si'>SÍ, LIBERAR</button><button data-a='no'>NO, VOLVER</button></div></div>";
+    var ps=pagoSel[n],pd=pend[n]||{};
+    h+=!ps?"<div class='sec'><div class='conf'><p>¿CÓMO PAGARON?</p><button style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)' data-a='pagoe'>EFECTIVO</button><button style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)' data-a='pagot'>TRANSFERENCIA</button><button style='grid-column:1/-1;background:var(--ambar);color:var(--crema);border-color:var(--ambar)' data-a='pagop'>PENDIENTE</button><button style='grid-column:1/-1;background:var(--ambar);color:var(--crema);border-color:var(--ambar)' data-a='pgrupo'>PENDIENTE ENTRE VARIOS</button><button style='grid-column:1/-1' data-a='no'>NO, VOLVER</button></div></div>":ps==="form"?"<div class='sec'><div class='rot'>Pendiente · datos de quien debe</div><input type='text' placeholder='NOMBRE' data-dn value='"+esc(pd.nombre||"")+"' style='margin-bottom:8px'><input type='text' inputmode='tel' placeholder='TELÉFONO (OPCIONAL)' data-dt value='"+esc(pd.tel||"")+"' style='margin-bottom:8px'><input type='text' placeholder='NOTA (OPCIONAL)' data-do value='"+esc(pd.nota||"")+"'>"+(avisoDeu===n?"<div class='aviso'>ESCRIBÍ EL NOMBRE</div>":"")+"<div class='conf' style='margin-top:12px'><button style='background:var(--verdebtn);color:var(--crema);border-color:var(--verde)' data-a='pguardar'>GUARDAR</button><button data-a='pvolver'>VOLVER</button></div></div>":"<div class='sec'><div class='conf'><p>PAGO: "+(ps==="efectivo"?"EFECTIVO":ps==="transferencia"?"TRANSFERENCIA":"PENDIENTE · "+esc(pd.nombre||""))+"</p><p>¿Liberar la mesa? Se borra esta cuenta.</p><button class='si' data-a='si'>SÍ, LIBERAR</button><button data-a='no'>NO, VOLVER</button></div></div>";
    }else if(e==="pau"){
     h+="<div class='sec'><button class='liberar' data-a='liberar'>✔ PAGARON · DEJAR MESA LIBRE</button></div>";
    }
@@ -237,7 +381,7 @@ function tick(){
   var d=document.querySelector("[data-n='"+n+"']");if(!d){olvidar(n);return}
   var r=d.querySelector("[data-r]");if(!r){olvidar(n);return}
   r.textContent=reloj(ms(m));
-  d.querySelector("[data-ct]").textContent=pesos(costoTiempo(m));
+  d.querySelector("[data-ct]").textContent=pesos(costoTiempo(m))+" ("+bloques(m)*15+" MIN)";
   numero(d.querySelector("[data-t]"),Math.round(costoTiempo(m)+bebTotal(m)),n);
  });
  document.getElementById("resumen").textContent="Corriendo: "+corr+"  ·  Libres: "+libres;
@@ -245,6 +389,7 @@ function tick(){
 document.getElementById("mesas").addEventListener("change",function(ev){if(ev.target.hasAttribute("data-s")){selBeb[ev.target.closest("[data-n]").getAttribute("data-n")]=ev.target.value}});
 document.getElementById("mesas").addEventListener("input",function(ev){
  var t=ev.target;
+ if(t.hasAttribute("data-g")){gwInput(t);return}
  if(t.hasAttribute("data-bn")||t.hasAttribute("data-bp")){var id=t.closest("[data-id]").getAttribute("data-id"),bd=BD.filter(function(x){return x.id===id})[0];if(bd){if(t.hasAttribute("data-bn"))bd.nombre=t.value;else bd.precio=Math.max(0,parseFloat(t.value)||0);guardarB()}return}
  if(ev.target.hasAttribute("data-p")){
   var n=ev.target.closest("[data-n]").getAttribute("data-n"),m=M(n);
@@ -255,6 +400,66 @@ document.getElementById("mesas").addEventListener("input",function(ev){
 document.getElementById("mesas").addEventListener("click",function(ev){
  var b=ev.target.closest("[data-a]");if(!b)return;
  var a0=b.getAttribute("data-a");
+
+ if(a0.indexOf("g-")===0){
+  if(gw){
+   if(a0==="g-mas"&&gw.pers.length<12){gw.pers.push({nombre:"",tel:"",parte:0,lim:gw.lim});partir();gw.err=""}
+   else if(a0==="g-menos"&&gw.pers.length>2){gw.pers.pop();partir();gw.err=""}
+   else if(a0==="g-igual"){partir();gw.err=""}
+   else if(a0==="g-no"){var dsd=gw.desde;cerrarWizard(dsd);return}
+   else if(a0==="g-ok"){
+    var sm=0,er="";gw.pers.forEach(function(p){sm+=p.parte});
+    if(!(gw.total>0))er="ESCRIBÍ EL IMPORTE TOTAL";
+    else if(gw.pers.some(function(p){return !p.nombre.trim()}))er="FALTA EL NOMBRE DE UNA PERSONA";
+    else if(gw.pers.some(function(p){return !p.lim}))er="FALTA UNA FECHA LÍMITE";
+    else if(sm!==gw.total)er="LA SUMA DE LAS PARTES DEBE SER IGUAL AL TOTAL";
+    if(er){gw.err=er}
+    else{
+     var gnew={id:uid(),total:gw.total,ts:Date.now(),mesa:gw.mesa||"",integrantes:gw.pers.map(function(p){return{id:uid(),nombre:p.nombre.trim(),tel:p.tel.trim(),parte:p.parte,limite:p.lim,pagos:[]}})};
+     GG.push(gnew);guardarG();
+     var dsd2=gw.desde,mn=gw.mesa;
+     if(mn){var mm=M(mn);pend[mn]={nombre:"Grupo de "+gnew.integrantes.length+" personas"};pagoSel[mn]="pendiente";anotar(mm,mn);pagoSel[mn]=null;pend[mn]=null;mm.ini=null;mm.fin=null;mm.acc=0;mm.start=null;mm.pausada=false;mm.bebSi=false;mm.beb=[];confirmando=null;guardar()}
+     cerrarWizard(dsd2);aviso("Deuda compartida registrada");return;
+    }
+   }
+  }
+  dibujar();return;
+ }
+ if(a0.indexOf("gp-")===0){
+  var gid=b.closest("[data-gid]").getAttribute("data-gid"),gr=GG.filter(function(x){return x.id===gid})[0],pi=b.closest("[data-iid]"),iid=pi?pi.getAttribute("data-iid"):null;
+  if(a0==="gp-pagar")cobG={gid:gid,iid:iid,monto:"",err:""};
+  else if(a0==="gp-no")cobG=null;
+  else if((a0==="gp-e"||a0==="gp-t")&&gr&&pi){
+   var it2=gr.integrantes.filter(function(x){return x.id===iid})[0];
+   if(it2){
+    var raw=pi.querySelector("[data-gm]").value,mv=Math.round(parseFloat(raw)),sal=saldo(it2);
+    cobG={gid:gid,iid:iid,monto:raw,err:""};
+    if(!(mv>0))cobG.err="ESCRIBÍ UN MONTO MAYOR A CERO";
+    else if(mv>sal)cobG.err="EL MONTO NO PUEDE SUPERAR EL SALDO: "+pesos(sal);
+    else{it2.pagos.push({id:uid(),monto:mv,ts:Date.now(),metodo:a0==="gp-e"?"efectivo":"transferencia"});guardarG();cobG=null;aviso("Pago registrado correctamente")}
+   }
+  }
+  else if(a0==="gp-del")delG=gid;
+  else if(a0==="gp-delno")delG=null;
+  else if(a0==="gp-delsi"){GG=GG.filter(function(x){return x.id!==gid});guardarG();delG=null;aviso("Deuda compartida borrada")}
+  etiqPen();pendientes();return;
+ }
+ if(a0.indexOf("pen-")===0){
+  if(a0==="pen-nuevo"){abrirWizard(0,null,"pend");return}
+  var pid=b.closest("[data-id]").getAttribute("data-id"),dd=DD.filter(function(x){return x.id===pid})[0];
+  if(a0==="pen-cobrar")cobrando=pid;
+  else if(a0==="pen-del")cobrando="del:"+pid;
+  else if(a0==="pen-no")cobrando=null;
+  else if(a0==="pen-e"||a0==="pen-t"){if(dd){dd.pagada=true;dd.metodo=a0==="pen-e"?"efectivo":"transferencia";dd.pts=Date.now();guardarD();aviso("Pendiente cobrado")}cobrando=null}
+  else if(a0==="pen-delsi"){DD=DD.filter(function(x){return x.id!==pid});guardarD();cobrando=null;aviso("Pendiente borrado")}
+  etiqPen();pendientes();return;
+ }
+ if(a0.indexOf("reg-")===0){
+  if(a0==="reg-prev"||a0==="reg-next"){var hoyS=dia(Date.now());diaSel=mover(diaSel||hoyS,a0==="reg-prev"?-1:1);if(diaSel>=hoyS)diaSel=null}
+  else if(a0==="reg-exp")exportar();
+  else if(a0==="reg-imp"){document.getElementById("arch").click();return}
+  registro();return;
+ }
  if(a0.indexOf("adm-")===0){
   if(a0==="adm-add"){var nn=document.querySelector("[data-nn]").value.trim(),np=parseFloat(document.querySelector("[data-np]").value);if(!nn||!(np>0)){avisoAdm="ESCRIBÍ EL NOMBRE Y EL PRECIO"}else{BD.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),nombre:nn,precio:np});guardarB();avisoAdm=""}}
   else{var id=b.closest("[data-id]").getAttribute("data-id");if(a0==="adm-del")confBeb=id;else if(a0==="adm-no")confBeb=null;else if(a0==="adm-si"){BD=BD.filter(function(x){return x.id!==id});guardarB();confBeb=null}}
@@ -271,19 +476,25 @@ document.getElementById("mesas").addEventListener("click",function(ev){
  else if(a==="agregar"){var sv=d.querySelector("[data-s]");if(!sv)return;var bd=BD.filter(function(x){return x.id===sv.value})[0];if(!bd)return;m.beb.push({n:bd.nombre||"Sin nombre",p:bd.precio});selBeb[n]=bd.id;msg="Bebida agregada"}
  else if(a==="quitar"){var qi=parseInt(b.getAttribute("data-i"),10);if(qi>=0&&qi<m.beb.length){m.beb.splice(qi,1);msg="Bebida eliminada"}}
  else if(a==="undo")m.beb.pop();
- else if(a==="liberar"){confirmando=n;pagoSel[n]=null}
+ else if(a==="liberar"){confirmando=n;pagoSel[n]=null;pend[n]=null}
  else if(a==="pagoe")pagoSel[n]="efectivo";
  else if(a==="pagot")pagoSel[n]="transferencia";
+ else if(a==="pagop"){pagoSel[n]="form";avisoDeu=null}
+ else if(a==="pgrupo"){abrirWizard(Math.round(costoTiempo(m)+bebTotal(m)),n,"mesas");return}
+ else if(a==="pvolver"){pagoSel[n]=null;avisoDeu=null}
+ else if(a==="pguardar"){var nm=d.querySelector("[data-dn]").value.trim();pend[n]={nombre:nm,tel:d.querySelector("[data-dt]").value.trim(),nota:d.querySelector("[data-do]").value.trim()};if(nm){pagoSel[n]="pendiente";avisoDeu=null}else avisoDeu=n}
  else if(a==="no"){confirmando=null;pagoSel[n]=null}
- else if(a==="si"){if(!pagoSel[n])return;msg="Pago registrado correctamente";anotar(m,n);pagoSel[n]=null;m.ini=null;m.fin=null;m.acc=0;m.start=null;m.pausada=false;m.bebSi=false;m.beb=[];confirmando=null}
+ else if(a==="si"){if(!pagoSel[n]||pagoSel[n]==="form")return;msg=pagoSel[n]==="pendiente"?"Pendiente registrado":"Pago registrado correctamente";if(pagoSel[n]==="pendiente")crearDeuda(m,n);anotar(m,n);pagoSel[n]=null;pend[n]=null;m.ini=null;m.fin=null;m.acc=0;m.start=null;m.pausada=false;m.bebSi=false;m.beb=[];confirmando=null}
  guardar();dibujar();if(msg)aviso(msg);
 });
 document.addEventListener("visibilitychange",function(){if(!document.hidden)tick()});
 window.addEventListener("focus",tick);
 setInterval(tick,1000);
-function nav(v){vista=vista===v?"mesas":v;confirmando=null;confBeb=null;avisoAdm="";var r=document.getElementById("reg"),a=document.getElementById("adm");r.textContent=vista==="registro"?"VOLVER A LAS MESAS":"REGISTRO DEL DÍA";a.textContent=vista==="admin"?"VOLVER A LAS MESAS":"ADMINISTRAR BEBIDAS";r.style.display=vista==="admin"?"none":"";a.style.display=vista==="registro"?"none":"";document.getElementById("filtro").style.visibility=vista==="mesas"?"visible":"hidden";dibujar();entrar()}
+document.getElementById("arch").addEventListener("change",function(ev){var f=ev.target.files&&ev.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){importar(String(r.result))};r.readAsText(f);ev.target.value=""});
+function nav(v){vista=vista===v?"mesas":v;confirmando=null;confBeb=null;avisoAdm="";diaSel=null;cobrando=null;var r=document.getElementById("reg"),a=document.getElementById("adm"),p=document.getElementById("pen");r.textContent=vista==="registro"?"VOLVER A LAS MESAS":"REGISTRO DEL DÍA";a.textContent=vista==="admin"?"VOLVER A LAS MESAS":"ADMINISTRAR BEBIDAS";r.style.display=vista==="mesas"||vista==="registro"?"":"none";a.style.display=vista==="mesas"||vista==="admin"?"":"none";p.style.display=vista==="mesas"||vista==="pend"?"":"none";etiqPen();document.getElementById("filtro").style.visibility=vista==="mesas"?"visible":"hidden";dibujar();entrar()}
 document.getElementById("reg").addEventListener("click",function(){nav("registro")});
 document.getElementById("adm").addEventListener("click",function(){nav("admin")});
+document.getElementById("pen").addEventListener("click",function(){nav("pend")});
 document.getElementById("filtro").addEventListener("click",function(){filtro=filtro==="todas"?"ocupadas":filtro==="ocupadas"?"libres":"todas";confirmando=null;dibujar();entrar()});
 dibujar();entrar();
 </script>
